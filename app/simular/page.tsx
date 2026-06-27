@@ -23,7 +23,13 @@ export default async function SimularPage({ searchParams }: SimularPageProps) {
     cpf: readParam(params, "cpf"),
     email: readParam(params, "email"),
     telefone: readParam(params, "telefone"),
-    cep: readParam(params, "cep")
+    cep: readParam(params, "cep"),
+    merchant_alias: readParam(params, "merchant_alias"),
+    checkout_id: readParam(params, "checkout_id"),
+    cart_id: readParam(params, "cart_id"),
+    order_id: readParam(params, "order_id"),
+    return_url: readParam(params, "return_url"),
+    yampi_customer_id: readParam(params, "yampi_customer_id")
   };
 
   return (

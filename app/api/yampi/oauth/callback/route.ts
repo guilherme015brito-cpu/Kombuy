@@ -95,6 +95,10 @@ function expiresAt(seconds: unknown) {
     : null;
 }
 
+function expiresAtWithDefault(seconds: unknown, defaultSeconds: number) {
+  return expiresAt(seconds) || new Date(Date.now() + defaultSeconds * 1000).toISOString();
+}
+
 async function readTokenResponse(response: Response) {
   try {
     return (await response.json()) as TokenResponse;
@@ -175,20 +179,31 @@ export async function GET(request: NextRequest) {
   }
 
   const merchantAlias = getMerchantAlias(token, merchant);
-  const { error } = await supabase.from("yampi_instalacoes").insert({
+  const installationPayload = {
     loja_id: getStoreId(token, merchant),
     loja_nome: getStoreName(token, merchantAlias),
     merchant_alias: merchantAlias,
+    merchant_id: getStoreId(token, merchant),
     access_token: token.access_token,
     refresh_token: token.refresh_token || null,
-    token_expires_at: expiresAt(token.expires_in),
-    refresh_token_expires_at: expiresAt(token.refresh_token_expires_in),
+    token_expires_at: expiresAtWithDefault(token.expires_in, 10 * 60),
+    refresh_token_expires_at: token.refresh_token
+      ? expiresAtWithDefault(token.refresh_token_expires_in, 30 * 24 * 60 * 60)
+      : null,
     scope: token.scope || null,
     status: "ativa",
     updated_at: new Date().toISOString()
-  });
+  };
 
-  if (error) {
+  const existingInstallation = merchantAlias
+    ? await supabase.from("yampi_instalacoes").select("id").eq("merchant_alias", merchantAlias).maybeSingle()
+    : { data: null, error: null };
+
+  const saveResult = existingInstallation.data
+    ? await supabase.from("yampi_instalacoes").update(installationPayload).eq("id", existingInstallation.data.id)
+    : await supabase.from("yampi_instalacoes").insert(installationPayload);
+
+  if (existingInstallation.error || saveResult.error) {
     return redirectWithClearedCookies(request, "erro", "Token recebido, mas nao foi possivel salvar a instalacao.");
   }
 

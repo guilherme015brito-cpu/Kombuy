@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
 import { CopyButton } from "@/components/CopyButton";
+import { YampiConnectionTester } from "@/components/YampiConnectionTester";
+import { requireAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin, type YampiInstallation } from "@/lib/supabase-server";
 import { getYampiConfig, getYampiMissingEnvMessage } from "@/lib/yampi";
 
@@ -41,22 +43,25 @@ async function getInstallations() {
 
   const { data, error } = await supabase
     .from("yampi_instalacoes")
-    .select("id,loja_id,loja_nome,merchant_alias,scope,token_expires_at,refresh_token_expires_at,status,created_at,updated_at")
+    .select("id,loja_id,loja_nome,merchant_alias,merchant_id,scope,token_expires_at,refresh_token_expires_at,last_api_check_at,last_api_check_status,last_api_check_message,status,created_at,updated_at")
     .order("created_at", { ascending: false });
 
   return {
     installations: (data ?? []) as YampiInstallation[],
-    error: error?.message
+    error: error ? "Nao foi possivel carregar as instalacoes da Yampi agora." : undefined
   };
 }
 
 export default async function YampiAdminPage({ searchParams }: YampiAdminPageProps) {
+  await requireAdmin();
   const params = (await searchParams) ?? {};
   const status = readParam(params, "status");
   const message = readParam(params, "mensagem");
   const { config, missing, isConfigured } = getYampiConfig();
   const { installations, error } = await getInstallations();
   const hasInstallation = installations.length > 0;
+  const latestInstallation = installations[0] ?? null;
+  const apiValidated = Boolean(latestInstallation?.last_api_check_status && latestInstallation.last_api_check_status >= 200 && latestInstallation.last_api_check_status < 300);
   const appUrl = config.appUrl || process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "";
   const yampiUrls = [
     { label: "URL de instalacao", value: appUrl ? `${appUrl}/api/yampi/oauth/start` : "" },
@@ -114,9 +119,16 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               {hasInstallation
-                ? "Existe pelo menos uma instalacao salva no Supabase."
+                ? latestInstallation?.status === "reautorizacao_necessaria"
+                  ? "Reconecte a loja Yampi para renovar a autorizacao."
+                  : "Existe pelo menos uma instalacao salva no Supabase."
                 : "Nenhuma instalacao conectada foi encontrada."}
             </p>
+            {latestInstallation?.last_api_check_at ? (
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                Ultimo teste: {formatDate(latestInstallation.last_api_check_at)}
+              </p>
+            ) : null}
           </div>
 
           {isConfigured ? (
@@ -124,13 +136,30 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
               href="/api/yampi/oauth/start"
               className="inline-flex min-h-12 items-center justify-center rounded-lg bg-brand-green px-6 py-3 text-sm font-bold text-white transition hover:bg-green-700"
             >
-              Conectar Yampi
+              {hasInstallation ? "Reconectar Yampi" : "Conectar Yampi"}
             </Link>
           ) : (
             <span className="inline-flex min-h-12 cursor-not-allowed items-center justify-center rounded-lg bg-slate-400 px-6 py-3 text-sm font-bold text-white">
               Conectar Yampi
             </span>
           )}
+        </div>
+
+        <YampiConnectionTester />
+
+        <div className="mb-6 rounded-xl border border-brand-line bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-bold text-brand-navy">Prontidao para integracao de pagamento</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <ReadinessItem label="OAuth conectado" ready={hasInstallation} />
+            <ReadinessItem label="API validada" ready={apiValidated} />
+            <ReadinessItem label="Formas de pagamento consultadas" ready={apiValidated} />
+            <ReadinessItem label="Gateways consultados" ready={apiValidated} />
+            <ReadinessItem label="Webhook configurado" ready={Boolean(process.env.YAMPI_WEBHOOK_SECRET)} pendingLabel="Pendente" />
+            <ReadinessItem label="Homologacao de meio de pagamento" ready={false} pendingLabel="Pendente" />
+          </div>
+          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold leading-6 text-amber-900">
+            A criacao da opcao &quot;Financiar com Kombuy&quot; no bloco de pagamentos depende da especificacao e homologacao da Yampi como gateway ou meio de pagamento alternativo.
+          </div>
         </div>
 
         <div className="mb-6 overflow-hidden rounded-xl border border-brand-line bg-white shadow-sm">
@@ -169,6 +198,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                   <Th>Escopo</Th>
                   <Th>Access token</Th>
                   <Th>Refresh token</Th>
+                  <Th>Ultimo teste</Th>
                   <Th>Status</Th>
                 </tr>
               </thead>
@@ -182,6 +212,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                     <Td>{installation.scope || "-"}</Td>
                     <Td>{getTokenStatus(installation.token_expires_at)}</Td>
                     <Td>{getTokenStatus(installation.refresh_token_expires_at)}</Td>
+                    <Td>{installation.last_api_check_at ? `${formatDate(installation.last_api_check_at)} (${installation.last_api_check_status ?? "-"})` : "-"}</Td>
                     <Td>
                       <StatusBadge status={installation.status} />
                     </Td>
@@ -189,7 +220,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                 ))}
                 {installations.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
                       Nenhuma instalacao encontrada.
                     </td>
                   </tr>
@@ -214,6 +245,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                   <MobileItem label="Escopo" value={installation.scope || "-"} />
                   <MobileItem label="Access token" value={getTokenStatus(installation.token_expires_at)} />
                   <MobileItem label="Refresh token" value={getTokenStatus(installation.refresh_token_expires_at)} />
+                  <MobileItem label="Ultimo teste" value={installation.last_api_check_at ? `${formatDate(installation.last_api_check_at)} (${installation.last_api_check_status ?? "-"})` : "-"} />
                 </dl>
               </article>
             ))}
@@ -240,16 +272,37 @@ function Td({ children }: { children: React.ReactNode }) {
 
 function getTokenStatus(expiresAt: string | null) {
   if (!expiresAt) {
-    return "Sem expiracao";
+    return "Validade nao registrada";
   }
 
-  return new Date(expiresAt).getTime() > Date.now() ? "Valido" : "Expirado";
+  return new Date(expiresAt).getTime() > Date.now() ? `Valido ate ${formatDate(expiresAt)}` : "Expirado";
+}
+
+function ReadinessItem({
+  label,
+  ready,
+  pendingLabel = "Nao validado"
+}: {
+  label: string;
+  ready: boolean;
+  pendingLabel?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-brand-line bg-brand-surface p-4">
+      <p className="text-sm font-bold text-brand-navy">{label}</p>
+      <p className={ready ? "mt-1 text-sm font-semibold text-brand-green" : "mt-1 text-sm font-semibold text-amber-700"}>
+        {ready ? "OK" : pendingLabel}
+      </p>
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const label = status === "reautorizacao_necessaria" ? "Reconexao necessaria" : status;
+
   return (
     <span className="inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-brand-green">
-      {status}
+      {label}
     </span>
   );
 }

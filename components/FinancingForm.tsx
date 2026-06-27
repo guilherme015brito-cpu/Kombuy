@@ -13,6 +13,12 @@ type InitialData = {
   email: string;
   telefone: string;
   cep: string;
+  merchant_alias: string;
+  checkout_id: string;
+  cart_id: string;
+  order_id: string;
+  return_url: string;
+  yampi_customer_id: string;
 };
 
 type FormState = {
@@ -31,6 +37,12 @@ type FormState = {
   entrada: string;
   parcelas: string;
   aceite_termos: boolean;
+  merchant_alias: string;
+  checkout_id: string;
+  cart_id: string;
+  order_id: string;
+  return_url: string;
+  yampi_customer_id: string;
 };
 
 type FinancingFormProps = {
@@ -112,7 +124,13 @@ export function FinancingForm({ initialData }: FinancingFormProps) {
     profissao: "",
     entrada: "",
     parcelas: "",
-    aceite_termos: false
+    aceite_termos: false,
+    merchant_alias: initialData.merchant_alias,
+    checkout_id: initialData.checkout_id,
+    cart_id: initialData.cart_id,
+    order_id: initialData.order_id,
+    return_url: initialData.return_url,
+    yampi_customer_id: initialData.yampi_customer_id
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState("");
@@ -252,6 +270,12 @@ export function FinancingForm({ initialData }: FinancingFormProps) {
           </Field>
 
           <input type="hidden" value={form.loja_id} />
+          <input type="hidden" value={form.merchant_alias} />
+          <input type="hidden" value={form.checkout_id} />
+          <input type="hidden" value={form.cart_id} />
+          <input type="hidden" value={form.order_id} />
+          <input type="hidden" value={form.return_url} />
+          <input type="hidden" value={form.yampi_customer_id} />
         </div>
 
         <label className="mt-6 flex gap-3 rounded-lg border border-brand-line bg-brand-surface p-4 text-sm leading-6 text-slate-700">

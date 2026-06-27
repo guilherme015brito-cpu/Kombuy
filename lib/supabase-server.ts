@@ -8,9 +8,13 @@ export type YampiInstallation = {
   loja_id: string | null;
   loja_nome: string | null;
   merchant_alias: string | null;
+  merchant_id: string | null;
   scope: string | null;
   token_expires_at: string | null;
   refresh_token_expires_at: string | null;
+  last_api_check_at: string | null;
+  last_api_check_status: number | null;
+  last_api_check_message: string | null;
   status: string;
   created_at: string;
   updated_at: string;

@@ -1,5 +1,6 @@
 import { BrandMark } from "@/components/BrandMark";
 import { ProposalStatusSelect } from "@/components/ProposalStatusSelect";
+import { requireAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin, type Proposal } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -59,11 +60,12 @@ async function getProposals() {
 
   return {
     proposals: (data ?? []) as Proposal[],
-    error: error?.message
+    error: error ? "Nao foi possivel carregar as propostas agora." : undefined
   };
 }
 
 export default async function AdminPropostasPage() {
+  await requireAdmin();
   const { proposals, error } = await getProposals();
   const metrics = getProposalMetrics(proposals);
 
