@@ -5,11 +5,10 @@ export type { Proposal };
 
 export type YampiInstallation = {
   id: string;
-  merchant_id: string | null;
-  merchant_name: string | null;
-  token_type: string | null;
+  loja_id: string | null;
+  loja_nome: string | null;
   scope: string | null;
-  expires_at: string | null;
+  token_expires_at: string | null;
   status: string;
   created_at: string;
   updated_at: string;

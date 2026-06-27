@@ -16,6 +16,12 @@ function getEventType(payload: Record<string, unknown>) {
   return typeof value === "string" && value.trim() ? value.trim() : "evento_desconhecido";
 }
 
+function getStoreId(payload: Record<string, unknown>) {
+  const data = payload.data && typeof payload.data === "object" ? (payload.data as Record<string, unknown>) : {};
+  const value = payload.loja_id || payload.merchant_id || payload.store_id || data.loja_id || data.merchant_id || data.store_id;
+  return typeof value === "string" || typeof value === "number" ? String(value) : null;
+}
+
 function headersToObject(headers: Headers) {
   const result: Record<string, string> = {};
 
@@ -36,7 +42,8 @@ export async function POST(request: Request) {
   }
 
   const { error } = await supabase.from("yampi_webhook_logs").insert({
-    event_type: getEventType(payload),
+    loja_id: getStoreId(payload),
+    evento: getEventType(payload),
     payload,
     headers: headersToObject(request.headers)
   });

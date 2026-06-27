@@ -10,6 +10,8 @@ type TokenResponse = {
   token_type?: string;
   expires_in?: number;
   scope?: string;
+  loja_id?: string | number;
+  loja_nome?: string;
   merchant_id?: string | number;
   merchant_name?: string;
   merchant?: {
@@ -37,16 +39,17 @@ function redirectToAdmin(request: Request, status: string, message?: string) {
 }
 
 function getMerchantId(token: TokenResponse) {
-  return String(token.merchant_id || token.merchant?.id || token.seller?.id || "").trim() || null;
+  return String(token.loja_id || token.merchant_id || token.merchant?.id || token.seller?.id || "").trim() || null;
 }
 
 function getMerchantName(token: TokenResponse) {
-  return String(token.merchant_name || token.merchant?.name || token.seller?.name || "").trim() || null;
+  return String(token.loja_nome || token.merchant_name || token.merchant?.name || token.seller?.name || "").trim() || null;
 }
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const state = requestUrl.searchParams.get("state");
 
   if (!code) {
     return redirectToAdmin(request, "erro", "A Yampi nao retornou o codigo de autorizacao.");
@@ -67,6 +70,7 @@ export async function GET(request: Request) {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
+    state: state || "",
     client_id: config.clientId,
     client_secret: config.clientSecret,
     redirect_uri: config.redirectUri
@@ -99,15 +103,13 @@ export async function GET(request: Request) {
       : null;
 
   const { error } = await supabase.from("yampi_instalacoes").insert({
-    merchant_id: getMerchantId(token),
-    merchant_name: getMerchantName(token),
+    loja_id: getMerchantId(token),
+    loja_nome: getMerchantName(token),
     access_token: token.access_token,
     refresh_token: token.refresh_token || null,
-    token_type: token.token_type || null,
     scope: token.scope || null,
-    expires_at: expiresAt,
-    token_response: token,
-    status: "conectado"
+    token_expires_at: expiresAt,
+    status: "ativa"
   });
 
   if (error) {

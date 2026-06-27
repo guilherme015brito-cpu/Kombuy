@@ -20,6 +20,7 @@ export type Proposal = {
   status: string;
   resposta_hiberbank: Record<string, unknown> | null;
   created_at: string;
+  updated_at: string | null;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

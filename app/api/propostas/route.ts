@@ -19,6 +19,8 @@ type ProposalPayload = {
   aceite_termos?: boolean;
 };
 
+const allowedStatuses = ["nova", "em_analise", "aprovada", "recusada", "cancelada"];
+
 function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -113,4 +115,50 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ success: true, proposta: data }, { status: 201 });
+}
+
+export async function PATCH(request: Request) {
+  const supabase = getSupabaseAdmin();
+
+  if (!supabase) {
+    return NextResponse.json(
+      { success: false, error: "Supabase nao configurado. Verifique as variaveis de ambiente." },
+      { status: 500 }
+    );
+  }
+
+  let payload: { id?: string; status?: string };
+
+  try {
+    payload = (await request.json()) as { id?: string; status?: string };
+  } catch {
+    return NextResponse.json({ success: false, error: "JSON invalido." }, { status: 400 });
+  }
+
+  const id = stringValue(payload.id);
+  const status = stringValue(payload.status);
+
+  if (!id) {
+    return NextResponse.json({ success: false, error: "ID da proposta obrigatorio." }, { status: 400 });
+  }
+
+  if (!allowedStatuses.includes(status)) {
+    return NextResponse.json({ success: false, error: "Status invalido." }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from("propostas")
+    .update({
+      status,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id)
+    .select("id,status")
+    .single();
+
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true, proposta: data });
 }

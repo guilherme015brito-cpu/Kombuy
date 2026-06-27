@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
+import { CopyButton } from "@/components/CopyButton";
 import { getSupabaseAdmin, type YampiInstallation } from "@/lib/supabase-server";
 import { getYampiConfig, getYampiMissingEnvMessage } from "@/lib/yampi";
 
@@ -40,7 +41,7 @@ async function getInstallations() {
 
   const { data, error } = await supabase
     .from("yampi_instalacoes")
-    .select("id,merchant_id,merchant_name,token_type,scope,expires_at,status,created_at,updated_at")
+    .select("id,loja_id,loja_nome,scope,token_expires_at,status,created_at,updated_at")
     .order("created_at", { ascending: false });
 
   return {
@@ -53,9 +54,16 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
   const params = (await searchParams) ?? {};
   const status = readParam(params, "status");
   const message = readParam(params, "mensagem");
-  const { missing, isConfigured } = getYampiConfig();
+  const { config, missing, isConfigured } = getYampiConfig();
   const { installations, error } = await getInstallations();
-  const isConnected = installations.some((installation) => installation.status === "conectado");
+  const isConnected = installations.some((installation) => installation.status === "ativa");
+  const appUrl = config.appUrl || process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "";
+  const yampiUrls = [
+    { label: "URL de instalacao", value: appUrl ? `${appUrl}/api/yampi/oauth/start` : "" },
+    { label: "URL de redirecionamento/OAuth", value: appUrl ? `${appUrl}/api/yampi/oauth/callback` : "" },
+    { label: "URL de webhook", value: appUrl ? `${appUrl}/api/yampi/webhook` : "" },
+    { label: "URL do painel/configuracao", value: appUrl ? `${appUrl}/admin/integracoes/yampi` : "" }
+  ];
 
   return (
     <main className="page-shell min-h-screen">
@@ -125,6 +133,26 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
           )}
         </div>
 
+        <div className="mb-6 overflow-hidden rounded-xl border border-brand-line bg-white shadow-sm">
+          <div className="border-b border-brand-line px-5 py-4">
+            <h2 className="text-lg font-bold text-brand-navy">URLs para Yampi Parceiros</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Copie estas URLs para configurar instalacao, OAuth, webhook e acesso ao painel.
+            </p>
+          </div>
+          <div className="divide-y divide-brand-line">
+            {yampiUrls.map((item) => (
+              <div key={item.label} className="grid gap-3 px-5 py-4 lg:grid-cols-[220px_1fr_auto] lg:items-center">
+                <p className="text-sm font-bold text-brand-navy">{item.label}</p>
+                <code className="overflow-x-auto rounded-lg bg-brand-surface px-3 py-2 text-sm text-slate-700">
+                  {item.value || "Configure NEXT_PUBLIC_APP_URL"}
+                </code>
+                {item.value ? <CopyButton value={item.value} /> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="overflow-hidden rounded-xl border border-brand-line bg-white shadow-sm">
           <div className="border-b border-brand-line px-5 py-4">
             <h2 className="text-lg font-bold text-brand-navy">Instalacoes salvas</h2>
@@ -136,9 +164,10 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                 <tr>
                   <Th>Data</Th>
                   <Th>Loja</Th>
-                  <Th>Merchant ID</Th>
-                  <Th>Token</Th>
+                  <Th>Loja ID</Th>
+                  <Th>Escopo</Th>
                   <Th>Expira em</Th>
+                  <Th>Status do token</Th>
                   <Th>Status</Th>
                 </tr>
               </thead>
@@ -146,10 +175,11 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                 {installations.map((installation) => (
                   <tr key={installation.id} className="border-t border-brand-line">
                     <Td>{formatDate(installation.created_at)}</Td>
-                    <Td>{installation.merchant_name || "-"}</Td>
-                    <Td>{installation.merchant_id || "-"}</Td>
-                    <Td>{installation.token_type || "Bearer"}</Td>
-                    <Td>{formatDate(installation.expires_at)}</Td>
+                    <Td>{installation.loja_nome || "-"}</Td>
+                    <Td>{installation.loja_id || "-"}</Td>
+                    <Td>{installation.scope || "-"}</Td>
+                    <Td>{formatDate(installation.token_expires_at)}</Td>
+                    <Td>{getTokenStatus(installation.token_expires_at)}</Td>
                     <Td>
                       <StatusBadge status={installation.status} />
                     </Td>
@@ -157,7 +187,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                 ))}
                 {installations.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                       Nenhuma instalacao encontrada.
                     </td>
                   </tr>
@@ -172,14 +202,15 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{formatDate(installation.created_at)}</p>
-                    <h2 className="mt-2 text-lg font-bold text-brand-navy">{installation.merchant_name || "Loja Yampi"}</h2>
+                    <h2 className="mt-2 text-lg font-bold text-brand-navy">{installation.loja_nome || "Loja Yampi"}</h2>
                   </div>
                   <StatusBadge status={installation.status} />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
-                  <MobileItem label="Merchant ID" value={installation.merchant_id || "-"} />
-                  <MobileItem label="Token" value={installation.token_type || "Bearer"} />
-                  <MobileItem label="Expira em" value={formatDate(installation.expires_at)} />
+                  <MobileItem label="Loja ID" value={installation.loja_id || "-"} />
+                  <MobileItem label="Escopo" value={installation.scope || "-"} />
+                  <MobileItem label="Expira em" value={formatDate(installation.token_expires_at)} />
+                  <MobileItem label="Status do token" value={getTokenStatus(installation.token_expires_at)} />
                 </dl>
               </article>
             ))}
@@ -202,6 +233,14 @@ function Th({ children }: { children: React.ReactNode }) {
 
 function Td({ children }: { children: React.ReactNode }) {
   return <td className="px-4 py-4 align-top text-slate-700">{children}</td>;
+}
+
+function getTokenStatus(expiresAt: string | null) {
+  if (!expiresAt) {
+    return "Sem expiracao";
+  }
+
+  return new Date(expiresAt).getTime() > Date.now() ? "Valido" : "Expirado";
 }
 
 function StatusBadge({ status }: { status: string }) {

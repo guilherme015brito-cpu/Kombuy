@@ -1,4 +1,5 @@
 import { BrandMark } from "@/components/BrandMark";
+import { ProposalStatusSelect } from "@/components/ProposalStatusSelect";
 import { getSupabaseAdmin, type Proposal } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,28 @@ function formatCurrency(value: number | null) {
   }
 
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function getStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    nova: "Nova",
+    em_analise: "Em analise",
+    aprovada: "Aprovada",
+    recusada: "Recusada",
+    cancelada: "Cancelada"
+  };
+
+  return labels[status] || status;
+}
+
+function getProposalMetrics(proposals: Proposal[]) {
+  return {
+    total: proposals.length,
+    nova: proposals.filter((proposal) => proposal.status === "nova").length,
+    em_analise: proposals.filter((proposal) => proposal.status === "em_analise").length,
+    aprovada: proposals.filter((proposal) => proposal.status === "aprovada").length,
+    recusada: proposals.filter((proposal) => proposal.status === "recusada").length
+  };
 }
 
 async function getProposals() {
@@ -42,6 +65,7 @@ async function getProposals() {
 
 export default async function AdminPropostasPage() {
   const { proposals, error } = await getProposals();
+  const metrics = getProposalMetrics(proposals);
 
   return (
     <main className="page-shell min-h-screen">
@@ -69,6 +93,14 @@ export default async function AdminPropostasPage() {
           </div>
         ) : null}
 
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <MetricCard label="Total de propostas" value={metrics.total} />
+          <MetricCard label="Propostas novas" value={metrics.nova} />
+          <MetricCard label="Em analise" value={metrics.em_analise} />
+          <MetricCard label="Aprovadas" value={metrics.aprovada} />
+          <MetricCard label="Recusadas" value={metrics.recusada} />
+        </div>
+
         <div className="hidden overflow-hidden rounded-xl border border-brand-line bg-white shadow-sm lg:block">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-brand-navy text-white">
@@ -83,6 +115,7 @@ export default async function AdminPropostasPage() {
                 <Th>Renda mensal</Th>
                 <Th>Parcelas</Th>
                 <Th>Status</Th>
+                <Th>Alterar</Th>
               </tr>
             </thead>
             <tbody>
@@ -100,11 +133,14 @@ export default async function AdminPropostasPage() {
                   <Td>
                     <StatusBadge status={proposal.status} />
                   </Td>
+                  <Td>
+                    <ProposalStatusSelect proposalId={proposal.id} initialStatus={proposal.status} />
+                  </Td>
                 </tr>
               ))}
               {proposals.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
                     Nenhuma proposta encontrada.
                   </td>
                 </tr>
@@ -133,6 +169,10 @@ export default async function AdminPropostasPage() {
                 <MobileItem label="Renda mensal" value={formatCurrency(proposal.renda_mensal)} />
                 <MobileItem label="Parcelas" value={proposal.parcelas ? `${proposal.parcelas}` : "-"} />
               </dl>
+              <div className="mt-5 border-t border-brand-line pt-4">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Alterar status</p>
+                <ProposalStatusSelect proposalId={proposal.id} initialStatus={proposal.status} />
+              </div>
             </article>
           ))}
 
@@ -147,6 +187,15 @@ export default async function AdminPropostasPage() {
   );
 }
 
+function MetricCard({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-brand-line bg-white p-5 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-3 text-3xl font-black text-brand-navy">{value}</p>
+    </div>
+  );
+}
+
 function Th({ children }: { children: React.ReactNode }) {
   return <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide">{children}</th>;
 }
@@ -158,7 +207,7 @@ function Td({ children }: { children: React.ReactNode }) {
 function StatusBadge({ status }: { status: string }) {
   return (
     <span className="inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-brand-green">
-      {status}
+      {getStatusLabel(status)}
     </span>
   );
 }

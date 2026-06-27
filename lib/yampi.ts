@@ -16,6 +16,8 @@ const requiredEnvLabels: Record<keyof YampiConfig, string> = {
   appUrl: "NEXT_PUBLIC_APP_URL"
 };
 
+const startEnvKeys: Array<keyof YampiConfig> = ["clientId", "redirectUri", "authUrl", "appUrl"];
+
 function cleanUrl(value: string) {
   return value.replace(/\/$/, "");
 }
@@ -47,7 +49,10 @@ export function getYampiConfig() {
 }
 
 export function buildYampiAuthUrl(state: string) {
-  const { config, missing } = getYampiConfig();
+  const { config } = getYampiConfig();
+  const missing = startEnvKeys
+    .filter((key) => !config[key])
+    .map((key) => requiredEnvLabels[key]);
 
   if (missing.length > 0) {
     return {
