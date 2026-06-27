@@ -41,7 +41,7 @@ async function getInstallations() {
 
   const { data, error } = await supabase
     .from("yampi_instalacoes")
-    .select("id,loja_id,loja_nome,scope,token_expires_at,status,created_at,updated_at")
+    .select("id,loja_id,loja_nome,merchant_alias,scope,token_expires_at,refresh_token_expires_at,status,created_at,updated_at")
     .order("created_at", { ascending: false });
 
   return {
@@ -56,7 +56,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
   const message = readParam(params, "mensagem");
   const { config, missing, isConfigured } = getYampiConfig();
   const { installations, error } = await getInstallations();
-  const isConnected = installations.some((installation) => installation.status === "ativa");
+  const hasInstallation = installations.length > 0;
   const appUrl = config.appUrl || process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "";
   const yampiUrls = [
     { label: "URL de instalacao", value: appUrl ? `${appUrl}/api/yampi/oauth/start` : "" },
@@ -110,11 +110,11 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
           <div className="rounded-xl border border-brand-line bg-white p-5 shadow-sm">
             <p className="text-sm font-bold uppercase tracking-wide text-slate-500">Status</p>
             <p className="mt-2 text-2xl font-black text-brand-navy">
-              {isConnected ? "Conectado" : "Nao conectado"}
+              {hasInstallation ? "Conectado" : "Nao conectado"}
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              {isConnected
-                ? "Existe pelo menos uma instalacao ativa salva no Supabase."
+              {hasInstallation
+                ? "Existe pelo menos uma instalacao salva no Supabase."
                 : "Nenhuma instalacao conectada foi encontrada."}
             </p>
           </div>
@@ -164,10 +164,11 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                 <tr>
                   <Th>Data</Th>
                   <Th>Loja</Th>
+                  <Th>Alias</Th>
                   <Th>Loja ID</Th>
                   <Th>Escopo</Th>
-                  <Th>Expira em</Th>
-                  <Th>Status do token</Th>
+                  <Th>Access token</Th>
+                  <Th>Refresh token</Th>
                   <Th>Status</Th>
                 </tr>
               </thead>
@@ -176,10 +177,11 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                   <tr key={installation.id} className="border-t border-brand-line">
                     <Td>{formatDate(installation.created_at)}</Td>
                     <Td>{installation.loja_nome || "-"}</Td>
+                    <Td>{installation.merchant_alias || "-"}</Td>
                     <Td>{installation.loja_id || "-"}</Td>
                     <Td>{installation.scope || "-"}</Td>
-                    <Td>{formatDate(installation.token_expires_at)}</Td>
                     <Td>{getTokenStatus(installation.token_expires_at)}</Td>
+                    <Td>{getTokenStatus(installation.refresh_token_expires_at)}</Td>
                     <Td>
                       <StatusBadge status={installation.status} />
                     </Td>
@@ -187,7 +189,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                 ))}
                 {installations.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                       Nenhuma instalacao encontrada.
                     </td>
                   </tr>
@@ -208,9 +210,10 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
                   <MobileItem label="Loja ID" value={installation.loja_id || "-"} />
+                  <MobileItem label="Alias" value={installation.merchant_alias || "-"} />
                   <MobileItem label="Escopo" value={installation.scope || "-"} />
-                  <MobileItem label="Expira em" value={formatDate(installation.token_expires_at)} />
-                  <MobileItem label="Status do token" value={getTokenStatus(installation.token_expires_at)} />
+                  <MobileItem label="Access token" value={getTokenStatus(installation.token_expires_at)} />
+                  <MobileItem label="Refresh token" value={getTokenStatus(installation.refresh_token_expires_at)} />
                 </dl>
               </article>
             ))}

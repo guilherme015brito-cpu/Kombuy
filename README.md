@@ -16,8 +16,8 @@ Kombuy e um MVP em Next.js para simulacao externa de financiamento em e-commerce
 - `/admin/propostas`: painel administrativo de propostas.
 - `/admin/integracoes/yampi`: painel da integracao Yampi.
 - `/api/propostas`: cria propostas e atualiza status.
-- `/api/yampi/oauth/start`: inicia OAuth Yampi.
-- `/api/yampi/oauth/callback`: recebe `code`, troca por token e salva a loja.
+- `/api/yampi/oauth/start`: inicia OAuth Yampi com PKCE.
+- `/api/yampi/oauth/callback`: inicia OAuth quando vem sem `code`, ou recebe `code`, valida `state`, troca por token com PKCE e salva a loja.
 - `/api/yampi/webhook`: recebe webhooks e salva payload bruto.
 
 ## Rodar localmente
@@ -51,7 +51,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_APP_URL=
 YAMPI_CLIENT_ID=
-YAMPI_CLIENT_SECRET=
 YAMPI_REDIRECT_URI=
 YAMPI_AUTH_URL=
 YAMPI_TOKEN_URL=
@@ -87,8 +86,10 @@ No projeto da Vercel, cadastre as mesmas variaveis do `.env.local` em Settings >
 Para producao:
 
 ```env
-NEXT_PUBLIC_APP_URL=https://seu-dominio.vercel.app
-YAMPI_REDIRECT_URI=https://seu-dominio.vercel.app/api/yampi/oauth/callback
+NEXT_PUBLIC_APP_URL=https://kombuy.vercel.app
+YAMPI_REDIRECT_URI=https://kombuy.vercel.app/api/yampi/oauth/callback
+YAMPI_AUTH_URL=https://auth.yampi.com.br/oauth/authorize
+YAMPI_TOKEN_URL=https://auth.yampi.com.br/oauth/token
 ```
 
 Depois de mudar variaveis, faca um novo deploy.
@@ -99,16 +100,16 @@ Use o dominio final do deploy:
 
 ```text
 URL de instalacao:
-https://seu-dominio.vercel.app/api/yampi/oauth/start
+https://kombuy.vercel.app/api/yampi/oauth/start
 
 URL de redirecionamento/OAuth:
-https://seu-dominio.vercel.app/api/yampi/oauth/callback
+https://kombuy.vercel.app/api/yampi/oauth/callback
 
 URL de webhook:
-https://seu-dominio.vercel.app/api/yampi/webhook
+https://kombuy.vercel.app/api/yampi/webhook
 
 URL do painel/configuracao:
-https://seu-dominio.vercel.app/admin/integracoes/yampi
+https://kombuy.vercel.app/admin/integracoes/yampi
 ```
 
 Essas URLs tambem aparecem com botao de copiar em `/admin/integracoes/yampi`.
@@ -160,12 +161,15 @@ Verifique:
 
 Para testar OAuth:
 
-1. Configure `YAMPI_CLIENT_ID`, `YAMPI_CLIENT_SECRET`, `YAMPI_AUTH_URL`, `YAMPI_TOKEN_URL`, `YAMPI_REDIRECT_URI` e `NEXT_PUBLIC_APP_URL`.
+1. Configure `YAMPI_CLIENT_ID`, `YAMPI_AUTH_URL`, `YAMPI_TOKEN_URL`, `YAMPI_REDIRECT_URI` e `NEXT_PUBLIC_APP_URL`.
 2. Clique em `Conectar Yampi`.
-3. Autorize na Yampi.
-4. A Yampi redireciona para `/api/yampi/oauth/callback?code=...`.
-5. A Kombuy salva os tokens em `yampi_instalacoes`.
-6. O app volta para `/admin/integracoes/yampi?status=conectado`.
+3. A Kombuy gera `state`, `code_verifier` e `code_challenge`, salva `state` e `code_verifier` em cookies HttpOnly e redireciona para a Yampi.
+4. Autorize na Yampi.
+5. A Yampi redireciona para `/api/yampi/oauth/callback?code=...&state=...`.
+6. A Kombuy valida `state`, usa o `code_verifier`, troca o `code` por tokens e salva em `yampi_instalacoes`.
+7. O app limpa os cookies temporarios e volta para `/admin/integracoes/yampi?status=conectado`.
+
+A Yampi pode abrir diretamente `/api/yampi/oauth/callback` sem `code` na primeira chamada. Nesse caso, a Kombuy inicia o fluxo OAuth com PKCE automaticamente.
 
 ## Testar webhook
 
@@ -182,5 +186,6 @@ O endpoint salva `payload` e `headers` em `yampi_webhook_logs` e retorna HTTP 20
 - Nao ha autenticacao ainda. Proteja `/admin/*` antes de producao.
 - Nao ha Hiberbank ainda.
 - Nao ha forma de pagamento real.
-- `SUPABASE_SERVICE_ROLE_KEY` e `YAMPI_CLIENT_SECRET` sao usados apenas server-side.
+- `SUPABASE_SERVICE_ROLE_KEY` e usado apenas server-side.
+- A integracao Yampi usa OAuth 2.0 com PKCE e nao usa `YAMPI_CLIENT_SECRET`.
 - Tokens Yampi nao sao exibidos no frontend.

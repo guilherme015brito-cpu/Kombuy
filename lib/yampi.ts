@@ -1,6 +1,5 @@
 export type YampiConfig = {
   clientId: string;
-  clientSecret: string;
   redirectUri: string;
   authUrl: string;
   tokenUrl: string;
@@ -9,7 +8,6 @@ export type YampiConfig = {
 
 const requiredEnvLabels: Record<keyof YampiConfig, string> = {
   clientId: "YAMPI_CLIENT_ID",
-  clientSecret: "YAMPI_CLIENT_SECRET",
   redirectUri: "YAMPI_REDIRECT_URI",
   authUrl: "YAMPI_AUTH_URL",
   tokenUrl: "YAMPI_TOKEN_URL",
@@ -17,6 +15,8 @@ const requiredEnvLabels: Record<keyof YampiConfig, string> = {
 };
 
 const startEnvKeys: Array<keyof YampiConfig> = ["clientId", "redirectUri", "authUrl", "appUrl"];
+const DEFAULT_YAMPI_AUTH_URL = "https://auth.yampi.com.br/oauth/authorize";
+const DEFAULT_YAMPI_TOKEN_URL = "https://auth.yampi.com.br/oauth/token";
 
 function cleanUrl(value: string) {
   return value.replace(/\/$/, "");
@@ -24,16 +24,12 @@ function cleanUrl(value: string) {
 
 export function getYampiConfig() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ? cleanUrl(process.env.NEXT_PUBLIC_APP_URL) : "";
-  const redirectUri =
-    process.env.YAMPI_REDIRECT_URI ||
-    (appUrl ? `${appUrl}/api/yampi/oauth/callback` : "");
 
   const config: YampiConfig = {
     clientId: process.env.YAMPI_CLIENT_ID || "",
-    clientSecret: process.env.YAMPI_CLIENT_SECRET || "",
-    redirectUri,
-    authUrl: process.env.YAMPI_AUTH_URL || "",
-    tokenUrl: process.env.YAMPI_TOKEN_URL || "",
+    redirectUri: process.env.YAMPI_REDIRECT_URI || "",
+    authUrl: process.env.YAMPI_AUTH_URL || DEFAULT_YAMPI_AUTH_URL,
+    tokenUrl: process.env.YAMPI_TOKEN_URL || DEFAULT_YAMPI_TOKEN_URL,
     appUrl
   };
 
@@ -48,7 +44,7 @@ export function getYampiConfig() {
   };
 }
 
-export function buildYampiAuthUrl(state: string) {
+export function buildYampiAuthUrl(state: string, codeChallenge: string) {
   const { config } = getYampiConfig();
   const missing = startEnvKeys
     .filter((key) => !config[key])
@@ -66,6 +62,8 @@ export function buildYampiAuthUrl(state: string) {
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
 
   return {
     url: url.toString(),

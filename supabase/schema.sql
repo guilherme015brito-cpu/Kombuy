@@ -47,9 +47,11 @@ create table if not exists public.yampi_instalacoes (
   id uuid primary key default gen_random_uuid(),
   loja_id text,
   loja_nome text,
+  merchant_alias text,
   access_token text,
   refresh_token text,
   token_expires_at timestamptz,
+  refresh_token_expires_at timestamptz,
   scope text,
   status text default 'ativa',
   created_at timestamptz default now(),
@@ -58,9 +60,11 @@ create table if not exists public.yampi_instalacoes (
 
 alter table public.yampi_instalacoes add column if not exists loja_id text;
 alter table public.yampi_instalacoes add column if not exists loja_nome text;
+alter table public.yampi_instalacoes add column if not exists merchant_alias text;
 alter table public.yampi_instalacoes add column if not exists access_token text;
 alter table public.yampi_instalacoes add column if not exists refresh_token text;
 alter table public.yampi_instalacoes add column if not exists token_expires_at timestamptz;
+alter table public.yampi_instalacoes add column if not exists refresh_token_expires_at timestamptz;
 alter table public.yampi_instalacoes add column if not exists scope text;
 alter table public.yampi_instalacoes add column if not exists status text default 'ativa';
 alter table public.yampi_instalacoes add column if not exists created_at timestamptz default now();
@@ -104,5 +108,6 @@ create index if not exists propostas_status_idx on public.propostas (status);
 create index if not exists yampi_instalacoes_created_at_idx on public.yampi_instalacoes (created_at desc);
 create index if not exists yampi_instalacoes_status_idx on public.yampi_instalacoes (status);
 create index if not exists yampi_instalacoes_loja_id_idx on public.yampi_instalacoes (loja_id);
+create index if not exists yampi_instalacoes_merchant_alias_idx on public.yampi_instalacoes (merchant_alias);
 create index if not exists yampi_webhook_logs_created_at_idx on public.yampi_webhook_logs (created_at desc);
 create index if not exists yampi_webhook_logs_evento_idx on public.yampi_webhook_logs (evento);
