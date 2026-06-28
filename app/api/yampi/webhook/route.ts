@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
 import { verifyYampiWebhookSignature } from "@/lib/yampi/webhook-signature";
@@ -23,14 +24,13 @@ function parsePayload(rawBody: string) {
 }
 
 function getEventType(payload: Record<string, unknown>) {
-  const value = payload.event || payload.type || payload.name || payload.topic;
+  const value = payload.event;
   const event = typeof value === "string" && value.trim() ? value.trim() : "evento_desconhecido";
   return recognizedEvents.has(event) ? event : event;
 }
 
-function getEventIdentifier(payload: Record<string, unknown>) {
-  const value = payload.id || payload.event_id || payload.webhook_id || payload.uuid;
-  return typeof value === "string" || typeof value === "number" ? String(value) : null;
+function getEventIdentifier(rawBody: string) {
+  return createHash("sha256").update(rawBody).digest("hex");
 }
 
 function getStoreId(payload: Record<string, unknown>) {
@@ -41,11 +41,13 @@ function getStoreId(payload: Record<string, unknown>) {
 
 function headersToSafeObject(headers: Headers) {
   const result: Record<string, string> = {};
-  const blocked = new Set(["authorization", "cookie", "set-cookie", "x-yampi-hmac-sha256"]);
+  const allowed = new Set(["content-type", "user-agent"]);
 
   headers.forEach((value, key) => {
-    if (!blocked.has(key.toLowerCase())) {
-      result[key] = value;
+    const normalizedKey = key.toLowerCase();
+
+    if (allowed.has(normalizedKey)) {
+      result[normalizedKey] = value;
     }
   });
 
@@ -74,19 +76,18 @@ export async function POST(request: Request) {
   }
 
   const payload = parsePayload(rawBody);
-  const eventId = getEventIdentifier(payload);
+  const eventId = getEventIdentifier(rawBody);
   const eventType = getEventType(payload);
   const logPayload = {
     loja_id: getStoreId(payload) || installation.loja_id,
+    event_type: eventType,
     evento: eventType,
     event_id: eventId,
     payload,
     headers: headersToSafeObject(request.headers)
   };
 
-  const saveResult = eventId
-    ? await supabase.from("yampi_webhook_logs").upsert(logPayload, { onConflict: "event_id" })
-    : await supabase.from("yampi_webhook_logs").insert(logPayload);
+  const saveResult = await supabase.from("yampi_webhook_logs").upsert(logPayload, { onConflict: "event_id" });
 
   await supabase
     .from("yampi_instalacoes")

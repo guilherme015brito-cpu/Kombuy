@@ -119,6 +119,7 @@ alter table public.yampi_instalacoes add column if not exists updated_at timesta
 create table if not exists public.yampi_webhook_logs (
   id uuid primary key default gen_random_uuid(),
   loja_id text,
+  event_type text,
   evento text,
   event_id text,
   payload jsonb,
@@ -127,6 +128,7 @@ create table if not exists public.yampi_webhook_logs (
 );
 
 alter table public.yampi_webhook_logs add column if not exists loja_id text;
+alter table public.yampi_webhook_logs add column if not exists event_type text;
 alter table public.yampi_webhook_logs add column if not exists evento text;
 alter table public.yampi_webhook_logs add column if not exists event_id text;
 alter table public.yampi_webhook_logs add column if not exists payload jsonb;
@@ -161,6 +163,7 @@ create unique index if not exists yampi_instalacoes_merchant_alias_unique_idx on
 create index if not exists yampi_instalacoes_webhook_id_idx on public.yampi_instalacoes (webhook_id);
 create index if not exists yampi_instalacoes_webhook_status_idx on public.yampi_instalacoes (webhook_status);
 create index if not exists yampi_webhook_logs_created_at_idx on public.yampi_webhook_logs (created_at desc);
+create index if not exists yampi_webhook_logs_event_type_idx on public.yampi_webhook_logs (event_type);
 create index if not exists yampi_webhook_logs_evento_idx on public.yampi_webhook_logs (evento);
 create unique index if not exists yampi_webhook_logs_event_id_unique_idx on public.yampi_webhook_logs (event_id) where event_id is not null;
 
