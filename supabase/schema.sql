@@ -78,6 +78,15 @@ create table if not exists public.yampi_instalacoes (
   last_api_check_at timestamptz,
   last_api_check_status integer,
   last_api_check_message text,
+  webhook_id bigint,
+  webhook_secret text,
+  webhook_url text,
+  webhook_status text default 'pendente',
+  webhook_events jsonb,
+  webhook_created_at timestamptz,
+  webhook_last_received_at timestamptz,
+  webhook_last_event text,
+  webhook_last_error text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -95,6 +104,15 @@ alter table public.yampi_instalacoes add column if not exists status text defaul
 alter table public.yampi_instalacoes add column if not exists last_api_check_at timestamptz;
 alter table public.yampi_instalacoes add column if not exists last_api_check_status integer;
 alter table public.yampi_instalacoes add column if not exists last_api_check_message text;
+alter table public.yampi_instalacoes add column if not exists webhook_id bigint;
+alter table public.yampi_instalacoes add column if not exists webhook_secret text;
+alter table public.yampi_instalacoes add column if not exists webhook_url text;
+alter table public.yampi_instalacoes add column if not exists webhook_status text default 'pendente';
+alter table public.yampi_instalacoes add column if not exists webhook_events jsonb;
+alter table public.yampi_instalacoes add column if not exists webhook_created_at timestamptz;
+alter table public.yampi_instalacoes add column if not exists webhook_last_received_at timestamptz;
+alter table public.yampi_instalacoes add column if not exists webhook_last_event text;
+alter table public.yampi_instalacoes add column if not exists webhook_last_error text;
 alter table public.yampi_instalacoes add column if not exists created_at timestamptz default now();
 alter table public.yampi_instalacoes add column if not exists updated_at timestamptz default now();
 
@@ -140,6 +158,8 @@ create index if not exists yampi_instalacoes_status_idx on public.yampi_instalac
 create index if not exists yampi_instalacoes_loja_id_idx on public.yampi_instalacoes (loja_id);
 create index if not exists yampi_instalacoes_merchant_alias_idx on public.yampi_instalacoes (merchant_alias);
 create unique index if not exists yampi_instalacoes_merchant_alias_unique_idx on public.yampi_instalacoes (merchant_alias) where merchant_alias is not null;
+create index if not exists yampi_instalacoes_webhook_id_idx on public.yampi_instalacoes (webhook_id);
+create index if not exists yampi_instalacoes_webhook_status_idx on public.yampi_instalacoes (webhook_status);
 create index if not exists yampi_webhook_logs_created_at_idx on public.yampi_webhook_logs (created_at desc);
 create index if not exists yampi_webhook_logs_evento_idx on public.yampi_webhook_logs (evento);
 create unique index if not exists yampi_webhook_logs_event_id_unique_idx on public.yampi_webhook_logs (event_id) where event_id is not null;

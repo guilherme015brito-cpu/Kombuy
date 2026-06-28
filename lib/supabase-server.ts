@@ -15,6 +15,14 @@ export type YampiInstallation = {
   last_api_check_at: string | null;
   last_api_check_status: number | null;
   last_api_check_message: string | null;
+  webhook_id: number | null;
+  webhook_url: string | null;
+  webhook_status: string | null;
+  webhook_events: string[] | null;
+  webhook_created_at: string | null;
+  webhook_last_received_at: string | null;
+  webhook_last_event: string | null;
+  webhook_last_error: string | null;
   status: string;
   created_at: string;
   updated_at: string;

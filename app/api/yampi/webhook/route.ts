@@ -1,6 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-server";
+import { verifyYampiWebhookSignature } from "@/lib/yampi/webhook-signature";
 
 export const dynamic = "force-dynamic";
 
@@ -52,43 +52,33 @@ function headersToSafeObject(headers: Headers) {
   return result;
 }
 
-function isValidSignature(rawBody: string, signature: string | null) {
-  const secret = process.env.YAMPI_WEBHOOK_SECRET;
-
-  if (!secret || !signature) {
-    return false;
-  }
-
-  const digest = createHmac("sha256", secret).update(rawBody).digest("base64");
-  const received = Buffer.from(signature);
-  const expected = Buffer.from(digest);
-
-  if (received.length !== expected.length) {
-    return false;
-  }
-
-  return timingSafeEqual(received, expected);
-}
-
 export async function POST(request: Request) {
+  const requestUrl = new URL(request.url);
+  const merchantAlias = requestUrl.searchParams.get("merchant_alias");
   const rawBody = await request.text();
   const signature = request.headers.get("X-Yampi-Hmac-SHA256");
+  const supabase = getSupabaseAdmin();
 
-  if (!isValidSignature(rawBody, signature)) {
+  if (!merchantAlias || !supabase) {
+    return NextResponse.json({ received: false, error: "Webhook nao configurado." }, { status: 401 });
+  }
+
+  const { data: installation } = await supabase
+    .from("yampi_instalacoes")
+    .select("id,loja_id,merchant_alias,webhook_secret")
+    .eq("merchant_alias", merchantAlias)
+    .maybeSingle();
+
+  if (!installation?.webhook_secret || !verifyYampiWebhookSignature(rawBody, signature, installation.webhook_secret)) {
     return NextResponse.json({ received: false, error: "Assinatura invalida." }, { status: 401 });
   }
 
   const payload = parsePayload(rawBody);
-  const supabase = getSupabaseAdmin();
-
-  if (!supabase) {
-    return NextResponse.json({ received: true, saved: false }, { status: 200 });
-  }
-
   const eventId = getEventIdentifier(payload);
+  const eventType = getEventType(payload);
   const logPayload = {
-    loja_id: getStoreId(payload),
-    evento: getEventType(payload),
+    loja_id: getStoreId(payload) || installation.loja_id,
+    evento: eventType,
     event_id: eventId,
     payload,
     headers: headersToSafeObject(request.headers)
@@ -97,6 +87,17 @@ export async function POST(request: Request) {
   const saveResult = eventId
     ? await supabase.from("yampi_webhook_logs").upsert(logPayload, { onConflict: "event_id" })
     : await supabase.from("yampi_webhook_logs").insert(logPayload);
+
+  await supabase
+    .from("yampi_instalacoes")
+    .update({
+      webhook_last_received_at: new Date().toISOString(),
+      webhook_last_event: eventType,
+      webhook_status: "ativo",
+      webhook_last_error: saveResult.error ? "Evento recebido, mas nao foi possivel salvar o log." : null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", installation.id);
 
   return NextResponse.json({ received: true, saved: !saveResult.error }, { status: 200 });
 }

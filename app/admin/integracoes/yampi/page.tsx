@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
 import { CopyButton } from "@/components/CopyButton";
 import { YampiConnectionTester } from "@/components/YampiConnectionTester";
+import { YampiWebhookSetup } from "@/components/YampiWebhookSetup";
 import { requireAdmin } from "@/lib/auth/admin";
 import { getSupabaseAdmin, type YampiInstallation } from "@/lib/supabase-server";
 import { getYampiConfig, getYampiMissingEnvMessage } from "@/lib/yampi";
@@ -43,7 +44,7 @@ async function getInstallations() {
 
   const { data, error } = await supabase
     .from("yampi_instalacoes")
-    .select("id,loja_id,loja_nome,merchant_alias,merchant_id,scope,token_expires_at,refresh_token_expires_at,last_api_check_at,last_api_check_status,last_api_check_message,status,created_at,updated_at")
+    .select("id,loja_id,loja_nome,merchant_alias,merchant_id,scope,token_expires_at,refresh_token_expires_at,last_api_check_at,last_api_check_status,last_api_check_message,webhook_id,webhook_url,webhook_status,webhook_events,webhook_created_at,webhook_last_received_at,webhook_last_event,webhook_last_error,status,created_at,updated_at")
     .order("created_at", { ascending: false });
 
   return {
@@ -62,6 +63,8 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
   const hasInstallation = installations.length > 0;
   const latestInstallation = installations[0] ?? null;
   const apiValidated = Boolean(latestInstallation?.last_api_check_status && latestInstallation.last_api_check_status >= 200 && latestInstallation.last_api_check_status < 300);
+  const webhookReady = Boolean(latestInstallation?.webhook_id && ["ativo", "configurado"].includes(latestInstallation.webhook_status || ""));
+  const webhookFailed = latestInstallation?.webhook_status === "erro";
   const appUrl = config.appUrl || process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "";
   const yampiUrls = [
     { label: "URL de instalacao", value: appUrl ? `${appUrl}/api/yampi/oauth/start` : "" },
@@ -147,6 +150,8 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
 
         <YampiConnectionTester />
 
+        <YampiWebhookSetup />
+
         <div className="mb-6 rounded-xl border border-brand-line bg-white p-5 shadow-sm">
           <h2 className="text-lg font-bold text-brand-navy">Prontidao para integracao de pagamento</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -154,7 +159,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
             <ReadinessItem label="API validada" ready={apiValidated} />
             <ReadinessItem label="Formas de pagamento consultadas" ready={apiValidated} />
             <ReadinessItem label="Gateways consultados" ready={apiValidated} />
-            <ReadinessItem label="Webhook configurado" ready={Boolean(process.env.YAMPI_WEBHOOK_SECRET)} pendingLabel="Pendente" />
+            <ReadinessItem label="Webhook configurado" ready={webhookReady} pendingLabel={webhookFailed ? "Erro" : "Pendente"} />
             <ReadinessItem label="Homologacao de meio de pagamento" ready={false} pendingLabel="Pendente" />
           </div>
           <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold leading-6 text-amber-900">
@@ -199,6 +204,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                   <Th>Access token</Th>
                   <Th>Refresh token</Th>
                   <Th>Ultimo teste</Th>
+                  <Th>Webhook</Th>
                   <Th>Status</Th>
                 </tr>
               </thead>
@@ -214,13 +220,16 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                     <Td>{getTokenStatus(installation.refresh_token_expires_at)}</Td>
                     <Td>{installation.last_api_check_at ? `${formatDate(installation.last_api_check_at)} (${installation.last_api_check_status ?? "-"})` : "-"}</Td>
                     <Td>
+                      <WebhookSummary installation={installation} />
+                    </Td>
+                    <Td>
                       <StatusBadge status={installation.status} />
                     </Td>
                   </tr>
                 ))}
                 {installations.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                    <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
                       Nenhuma instalacao encontrada.
                     </td>
                   </tr>
@@ -246,6 +255,7 @@ export default async function YampiAdminPage({ searchParams }: YampiAdminPagePro
                   <MobileItem label="Access token" value={getTokenStatus(installation.token_expires_at)} />
                   <MobileItem label="Refresh token" value={getTokenStatus(installation.refresh_token_expires_at)} />
                   <MobileItem label="Ultimo teste" value={installation.last_api_check_at ? `${formatDate(installation.last_api_check_at)} (${installation.last_api_check_status ?? "-"})` : "-"} />
+                  <MobileItem label="Webhook" value={formatWebhookText(installation)} />
                 </dl>
               </article>
             ))}
@@ -268,6 +278,30 @@ function Th({ children }: { children: React.ReactNode }) {
 
 function Td({ children }: { children: React.ReactNode }) {
   return <td className="px-4 py-4 align-top text-slate-700">{children}</td>;
+}
+
+function formatWebhookText(installation: YampiInstallation) {
+  if (!installation.webhook_id) {
+    return installation.webhook_status === "erro" ? "Erro" : "Pendente";
+  }
+
+  const eventCount = installation.webhook_events?.length || 0;
+  return `ID ${installation.webhook_id} | ${installation.webhook_status || "configurado"} | ${eventCount} eventos`;
+}
+
+function WebhookSummary({ installation }: { installation: YampiInstallation }) {
+  return (
+    <div className="max-w-52 space-y-1 text-xs leading-5">
+      <p className="font-bold text-brand-navy">
+        {installation.webhook_id ? `ID ${installation.webhook_id}` : installation.webhook_status === "erro" ? "Erro" : "Pendente"}
+      </p>
+      <p>Status: {installation.webhook_status || "pendente"}</p>
+      <p>Eventos: {installation.webhook_events?.length || 0}</p>
+      <p>Criado em: {formatDate(installation.webhook_created_at)}</p>
+      <p>Ultimo evento: {installation.webhook_last_event || "-"}</p>
+      <p>Ultimo recebimento: {formatDate(installation.webhook_last_received_at)}</p>
+    </div>
+  );
 }
 
 function getTokenStatus(expiresAt: string | null) {

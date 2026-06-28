@@ -56,9 +56,10 @@ Execute no SQL Editor:
 
 ```text
 supabase/migrations/20260627_yampi_integration_hardening.sql
+supabase/migrations/20260628_yampi_webhook_setup.sql
 ```
 
-A migration e idempotente, nao apaga dados, adiciona colunas, RLS, indices, trigger de `updated_at` e backfill seguro de `merchant_alias`.
+As migrations sao idempotentes, nao apagam dados, adicionam colunas, RLS, indices, trigger de `updated_at`, backfill seguro de `merchant_alias` e campos de webhook por instalacao.
 
 ## Criar Administrador
 
@@ -114,7 +115,11 @@ Na Yampi, configure:
 https://kombuy.vercel.app/api/yampi/webhook
 ```
 
-Configure `YAMPI_WEBHOOK_SECRET` na Vercel. O webhook valida `X-Yampi-Hmac-SHA256` com HMAC-SHA256 em Base64, salva payload e headers seguros, aceita eventos desconhecidos e evita duplicidade quando houver `event_id`.
+O painel `/admin/integracoes/yampi` possui o botao `Configurar webhook`, que cadastra ou reutiliza o webhook da loja pela API da Yampi e salva `webhook_id`, `webhook_secret`, URL, eventos e status na instalacao. O segredo nao e exibido no frontend.
+
+O receptor recebe `merchant_alias` na query string, busca `webhook_secret` server-side e valida `X-Yampi-Hmac-SHA256` com HMAC-SHA256 em Base64. Ele salva payload e headers seguros, aceita eventos desconhecidos e evita duplicidade quando houver `event_id`.
+
+Em ambiente nao produtivo, `POST /api/yampi/webhooks/test-local` valida internamente o calculo HMAC sem registrar evento real.
 
 Eventos reconhecidos inicialmente:
 
@@ -147,7 +152,8 @@ Com `merchant_alias`, a proposta e salva com `origem='yampi'`; sem ele, `origem=
 5. Yampi Parceiros: configure redirect URI, URL de instalacao e webhook.
 6. Admin: acesse `/admin/login`.
 7. Admin: abra `/admin/integracoes/yampi` e clique em `Testar conexao`.
-8. Admin: abra `/admin/propostas` e confirme que propostas antigas aparecem.
+8. Admin: clique em `Configurar webhook`.
+9. Admin: abra `/admin/propostas` e confirme que propostas antigas aparecem.
 
 ## Limites Atuais
 
